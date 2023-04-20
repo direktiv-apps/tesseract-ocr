@@ -1,0 +1,35 @@
+url: ""
+functions:
+- type: knative-workflow
+  id: tesseract-ocr
+  image: gcr.io/direktiv/functions/tesseract-ocr:test
+states:
+- id: state0
+  type: action
+  action:
+    function: tesseract-ocr
+    input:
+      commands:
+      - command: tesseract --version
+  transition: state1
+- id: state1
+  type: action
+  action:
+    function: tesseract-ocr
+    input:
+      commands:
+      - command: tesseract image.png out/workflow/text
+    files:
+    - key: image.png
+      scope: workflow
+  transition: state2
+- id: state2
+  type: action
+  action:
+    function: tesseract-ocr
+    input:
+      commands:
+      - command: tesseract eurotext.png /out/workflow/eurotext-eng -l eng pdf
+    files:
+    - key: eurotext.png
+      scope: workflow

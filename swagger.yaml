@@ -1,0 +1,210 @@
+swagger: "2.0"
+info:
+  description: Run Tesseract OCR in Direktiv
+  title: tesseract-ocr
+  version: "1.0"
+  x-direktiv-meta:
+    container: gcr.io/direktiv/functions/tesseract-ocr
+    maintainer: |-
+      [direktiv.io](https://www.direktiv.io) 
+    issues: https://github.com/direktiv-apps/tesseract-ocr/issues
+    url: https://github.com/direktiv-apps/tesseract-ocr  
+    categories:
+    - unknown
+    license: |-
+      [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
+    long-description: >-
+      This package contains an OCR engine - libtesseract and a command line program - [tesseract](https://github.com/tesseract-ocr/tesseract).
+
+      
+      Tesseract 4 adds a new neural net (LSTM) based OCR engine which is focused on line recognition, but also still supports the legacy Tesseract OCR engine of Tesseract 3 which works by recognizing character patterns. Compatibility with Tesseract 3 is enabled by using the Legacy OCR Engine mode (--oem 0). It also needs traineddata files which support the legacy engine, for example those from the tessdata repository.
+
+      
+      Basic usage: `tesseract imagename outputbase [-l lang] [--oem ocrenginemode] [--psm pagesegmode] [configfiles...]`
+
+      
+      Use `--oem 1` for LSTM/neural network, `--oem 0` for Legacy Tesseract.
+
+      
+      Please note that Legacy Tesseract models are included in traineddata files from tessdata repo only.
+
+      
+      `tesseract input.tiff output --oem 1 -l eng`
+
+      
+      Tesseract has unicode (UTF-8) support, and can recognize more than 100 languages "out of the box". Tesseract supports various image formats including PNG, JPEG and TIFF. Tesseract supports various output formats: plain text, hOCR (HTML), PDF, invisible-text-only PDF, TSV and ALTO (the last one - since version 4.1.0). You should note that in many cases, in order to get better OCR results, you'll need to improve the quality of the image you are giving Tesseract.
+
+consumes:
+- application/json
+produces:
+- application/json
+schemes:
+- http
+paths:
+  /: 
+    delete:
+      parameters:
+        - name: Direktiv-ActionID
+          in: header
+          type: string
+          description: |
+            On cancel Direktiv sends a DELETE request to
+            the action with id in the header
+      x-direktiv:
+        cancel: echo 'cancel {{ .DirektivActionID }}'
+      responses:
+        200:
+    post:
+      parameters:
+        - name: Direktiv-ActionID
+          in: header
+          type: string
+          default: development
+          description: |
+            direktiv action id is an UUID. 
+            For development it can be set to 'development'
+        - name: Direktiv-TempDir
+          in: header
+          type: string
+          default: /tmp
+          description: |
+            direktiv temp dir is the working directory for that request
+            For development it can be set to e.g. '/tmp'
+        - name: body
+          in: body
+          schema:
+            type: object
+            properties:
+              files:
+                type: array
+                items:
+                  $ref: '#/definitions/direktivFile'
+                description: File to create before running commands.
+                default: []
+              commands:
+                type: array
+                description: Array of commands.
+                items:
+                  type: object
+                  properties:
+                    command:
+                      type: string
+                      description: Command to run
+                    silent: 
+                      type: boolean
+                      description: If set to false the command will not print output to logs.
+                      default: false
+                    print: 
+                      type: boolean
+                      description: If set to false the command will not print the full command with arguments to logs.
+                      default: true
+                    continue: 
+                      type: boolean
+                      description: Stops excecution if command fails, otherwise proceeds with next command 
+                default: 
+                - command: echo Hello
+      # direktiv code generation is configured here
+      x-direktiv-function: |-
+        functions:
+        - id: tesseract-ocr
+          image: gcr.io/direktiv/functions/tesseract-ocr:1.0
+          type: knative-workflow
+      x-direktiv-examples:
+        # ADD MORE EXAMPLES HERE
+        - title: Print the version installed for tessaract
+          content: |-
+            - id: tesseract-ocr
+              type: action
+              action:
+                function: tesseract-ocr
+                input: 
+                  commands:
+                  - command: tesseract --version
+        - title: Basic image conversion from a file in a variable, written to a local Direktiv variable
+          content: |-
+            - id: tesseract-ocr
+              type: action
+              action:
+                function: tesseract-ocr
+                files:
+                - key: image.png
+                  scope: workflow
+                input:
+                  commands:
+                  - command: tesseract image.png out/workflow/text
+        - title: Searchable pdf output, written to a local Direktiv variable
+          content: |-
+            - id: tesseract-ocr
+              type: action
+              action:
+                function: tesseract-ocr
+                files:
+                - key: eurotext.png
+                  scope: workflow
+                input:
+                  commands:
+                  - command: tesseract eurotext.png /out/workflow/eurotext-eng -l eng pdf
+      x-direktiv:  
+        cmds:
+        - action: foreach
+          loop: .Commands
+          exec: '{{ .Item.Command }}'
+          silent: '{{ .Item.Silent }}'
+          print: '{{ .Item.Print }}'
+          continue: '{{ .Item.Continue }}'
+        output: |
+          {
+            "tesseract-ocr": {{ index . 0 | toJson }}
+          }
+      x-direktiv-errors:
+        io.direktiv.command.error: Command execution failed
+        io.direktiv.output.error: Template error for output generation of the service
+        io.direktiv.ri.error: Can not create information object from request
+      responses:
+        200:
+          description: List of executed commands.
+          examples:
+            tesseract-ocr:
+            - result: "tesseract 4.1.1\n leptonica-1.82.0\n  libgif 5.1.9 : libjpeg 8d (libjpeg-turbo 2.1.1) : libpng 1.6.37 : libtiff 4.3.0 : zlib 1.2.11 : libwebp 1.2.2 : libopenjp2 2.4.0\n Found libarchive 3.6.0 zlib/1.2.11 liblzma/5.2.5 bz2lib/1.0.8 liblz4/1.9.3 libzstd/1.4.8"
+              success: true
+          schema:
+            type: object
+            properties:
+              tesseract-ocr:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - success
+                  - result
+                  properties:
+                    success:
+                      type: boolean
+                    result:
+                      additionalProperties: {}
+        default:
+          description: generic error response
+          headers:
+            Direktiv-ErrorCode:
+              type: string
+            Direktiv-ErrorMessage:
+              type: string
+          schema:
+            $ref: "#/definitions/error"
+definitions:
+  direktivFile:
+    type: object
+    x-go-type:
+      type: DirektivFile
+      import:
+        package: github.com/direktiv/apps/go/pkg/apps 
+  error:
+    type: object
+    required:
+      - errorCode
+      - errorMessage
+    properties:
+      errorCode:
+        type: string
+      errorMessage:
+        type: string
